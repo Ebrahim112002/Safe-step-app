@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ফায়ারবেস অথ ইমপোর্ট
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ডাটাবেজ ইমপোর্ট
 import '../core/app_theme.dart';
 import 'home_screen.dart';
 
@@ -11,29 +12,39 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // কন্ট্রোলার সেটআপ
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   bool _isLoading = false;
 
-  // রেজিস্ট্রেশন ফাংশন
   Future<void> _handleRegister() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    // ভ্যালিডেশন
+    if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
       _showError("Please fill all fields");
+      return;
+    }
+    if (_passwordController.text.length < 6) {
+      _showError("Password must be at least 6 characters");
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // ফায়ারবেসে ইউজার তৈরি
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      // ১. ফায়ারবেসে ইউজার তৈরি
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // সফল হলে হোম স্ক্রিনে নিয়ে যাবে
+      // ২. সফল হলে ইউজারের নাম এবং ইমেইল Firestore-এ সেভ করা
+      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'uid': userCredential.user!.uid,
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -49,9 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
   }
 
   @override
@@ -67,27 +76,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const Text("Create Account", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
             const Text("Join SafeStep to stay protected.", style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 30),
-            
             _buildTextField("Full Name", Icons.person_outline, _nameController),
             const SizedBox(height: 15),
             _buildTextField("Email Address", Icons.email_outlined, _emailController),
             const SizedBox(height: 15),
             _buildTextField("Password", Icons.lock_outline, _passwordController, isPassword: true),
-            
             const SizedBox(height: 30),
-            
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 onPressed: _isLoading ? null : _handleRegister,
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Sign Up", style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Sign Up", style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ),
           ],
