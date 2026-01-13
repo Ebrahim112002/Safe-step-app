@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/app_theme.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
@@ -9,36 +11,98 @@ class EmergencyContactsScreen extends StatefulWidget {
 }
 
 class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
-  final List<Map<String, String>> _contacts = [
-    {"name": "National Helpline", "phone": "999"},
-  ];
+  final _phoneController = TextEditingController();
+  final _nameController = TextEditingController();
+  bool _isLoading = false;
+  final User? user = FirebaseAuth.instance.currentUser;
 
-  void _showAddDialog() {
-    final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    showDialog(
+  // কন্টাক্ট সেভ করার ফাংশন
+  Future<void> _saveContact() async {
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .collection('contacts')
+          .add({
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      
+      _nameController.clear();
+      _phoneController.clear();
+      Navigator.pop(context); // Modal বন্ধ করবে
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Contact Added Successfully!")),
+      );
+    } catch (e) {
+      debugPrint(e.toString());
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // নতুন কন্টাক্ট যোগ করার জন্য প্রফেশনাল Modal
+  void _showAddContactModal() {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("New Contact", style: TextStyle(color: AppTheme.primaryBlue)),
-        content: Column(
+      isScrollControlled: true, // কিবোর্ড আসলে যেন স্ক্রিন উপরে ওঠে
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // কিবোর্ডের জন্য স্পেস
+          left: 20, right: 20, top: 20,
+        ),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Name")),
-            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: "Phone"), keyboardType: TextInputType.phone),
+            const Text(
+              "Add New Contact",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: "Name",
+                prefixIcon: const Icon(Icons.person),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: "Phone Number",
+                prefixIcon: const Icon(Icons.phone),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 25),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _isLoading ? null : _saveContact,
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Save Contact", style: TextStyle(color: Colors.white, fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
-            onPressed: () {
-              setState(() => _contacts.add({"name": nameCtrl.text, "phone": phoneCtrl.text}));
-              Navigator.pop(context);
-            },
-            child: const Text("Save", style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -46,36 +110,98 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Trusted Contacts"),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: _contacts.isEmpty 
-        ? const Center(child: Text("List is empty"))
-        : ListView.builder(
-            padding: const EdgeInsets.all(10),
-            itemCount: _contacts.length,
-            itemBuilder: (context, index) => Card(
-              elevation: 0.5,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFFE8EAF6), child: Icon(Icons.person, color: AppTheme.primaryBlue)),
-                title: Text(_contacts[index]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(_contacts[index]['phone']!),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_sweep_outlined, color: AppTheme.sosRed),
-                  onPressed: () => setState(() => _contacts.removeAt(index)),
-                ),
-              ),
-            ),
+        title: const Text("Emergency Contacts", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppTheme.primaryBlue,
+        elevation: 0.5,
+        actions: [
+          // উপরে + আইকন
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, size: 28),
+            onPressed: _showAddContactModal,
           ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddDialog,
+        ],
+      ),
+      body: StreamBuilder(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user!.uid)
+            .collection('contacts')
+            .snapshots(),
+        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.contact_phone_outlined, size: 80, color: Colors.grey[300]),
+                  const SizedBox(height: 10),
+                  const Text("No contacts saved yet.", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              var doc = snapshot.data!.docs[index];
+              return Card(
+                elevation: 0,
+                color: Colors.grey[50],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  side: BorderSide(color: Colors.grey[200]!),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
+                    child: const Icon(Icons.person, color: AppTheme.primaryBlue),
+                  ),
+                  title: Text(doc['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(doc['phone']),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    onPressed: () => _deleteContact(doc.reference),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      // নিচেও একটি Floating Action Button রাখা প্রফেশনাল দেখায়
+      floatingActionButton: FloatingActionButton(
         backgroundColor: AppTheme.primaryBlue,
-        label: const Text("Add Contact", style: TextStyle(color: Colors.white)),
-        icon: const Icon(Icons.add, color: Colors.white),
+        onPressed: _showAddContactModal,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  void _deleteContact(DocumentReference docRef) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Contact?"),
+        content: const Text("Are you sure you want to remove this contact?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () {
+              docRef.delete();
+              Navigator.pop(context);
+            }, 
+            child: const Text("Delete", style: TextStyle(color: Colors.red))
+          ),
+        ],
       ),
     );
   }
