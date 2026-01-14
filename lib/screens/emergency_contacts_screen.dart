@@ -16,7 +16,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   bool _isLoading = false;
   final User? user = FirebaseAuth.instance.currentUser;
 
-  // কন্টাক্ট সেভ করার ফাংশন
   Future<void> _saveContact() async {
     if (_nameController.text.isEmpty || _phoneController.text.isEmpty) return;
 
@@ -34,75 +33,75 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       
       _nameController.clear();
       _phoneController.clear();
-      Navigator.pop(context); // Modal বন্ধ করবে
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Contact Added Successfully!")),
-      );
+      if (mounted) Navigator.pop(context); 
+      _showSnackBar("Contact Saved!", Colors.green);
     } catch (e) {
-      debugPrint(e.toString());
+      _showSnackBar("Error saving contact", Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // নতুন কন্টাক্ট যোগ করার জন্য প্রফেশনাল Modal
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating),
+    );
+  }
+
   void _showAddContactModal() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // কিবোর্ড আসলে যেন স্ক্রিন উপরে ওঠে
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: AppTheme.darkBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom, // কিবোর্ডের জন্য স্পেস
-          left: 20, right: 20, top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 25, right: 25, top: 30,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Add New Contact",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: "Name",
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: "Phone Number",
-                prefixIcon: const Icon(Icons.phone),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            const Text("Add Emergency Contact", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 25),
+            _buildInput(_nameController, "Full Name", Icons.person_outline),
+            const SizedBox(height: 15),
+            _buildInput(_phoneController, "Phone Number", Icons.phone_outlined, isPhone: true),
+            const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 ),
                 onPressed: _isLoading ? null : _saveContact,
                 child: _isLoading 
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Save Contact", style: TextStyle(color: Colors.white, fontSize: 16)),
+                  : const Text("SAVE CONTACT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInput(TextEditingController ctrl, String label, IconData icon, {bool isPhone = false}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: Icon(icon, color: AppTheme.primaryBlue),
+        fillColor: AppTheme.cardColor,
+        filled: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
       ),
     );
   }
@@ -110,65 +109,40 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.darkBg,
       appBar: AppBar(
-        title: const Text("Emergency Contacts", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primaryBlue,
-        elevation: 0.5,
-        actions: [
-          // উপরে + আইকন
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, size: 28),
-            onPressed: _showAddContactModal,
-          ),
-        ],
+        title: const Text("Emergency Contacts"),
+        centerTitle: true,
       ),
       body: StreamBuilder(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(user!.uid)
             .collection('contacts')
+            .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.contact_phone_outlined, size: 80, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  const Text("No contacts saved yet.", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            );
+            return const Center(child: Text("No contacts added yet.", style: TextStyle(color: Colors.white54)));
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(20),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
               var doc = snapshot.data!.docs[index];
-              return Card(
-                elevation: 0,
-                color: Colors.grey[50],
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  side: BorderSide(color: Colors.grey[200]!),
-                ),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: AppTheme.cardColor, borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
-                    child: const Icon(Icons.person, color: AppTheme.primaryBlue),
-                  ),
-                  title: Text(doc['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(doc['phone']),
+                  leading: const CircleAvatar(backgroundColor: Colors.white10, child: Icon(Icons.person, color: Colors.white)),
+                  title: Text(doc['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(doc['phone'], style: const TextStyle(color: Colors.white60)),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    icon: const Icon(Icons.delete_outline, color: AppTheme.emergencyRed),
                     onPressed: () => _deleteContact(doc.reference),
                   ),
                 ),
@@ -177,7 +151,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
           );
         },
       ),
-      // নিচেও একটি Floating Action Button রাখা প্রফেশনাল দেখায়
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppTheme.primaryBlue,
         onPressed: _showAddContactModal,
@@ -190,17 +163,11 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Contact?"),
-        content: const Text("Are you sure you want to remove this contact?"),
+        backgroundColor: AppTheme.cardColor,
+        title: const Text("Delete?", style: TextStyle(color: Colors.white)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () {
-              docRef.delete();
-              Navigator.pop(context);
-            }, 
-            child: const Text("Delete", style: TextStyle(color: Colors.red))
-          ),
+          TextButton(onPressed: () { docRef.delete(); Navigator.pop(context); }, child: const Text("Delete", style: TextStyle(color: Colors.red))),
         ],
       ),
     );

@@ -26,7 +26,6 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     'Other'
   ];
 
-  // Image Pick korar function
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
@@ -38,7 +37,6 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     }
   }
 
-  // Report Submit korar function
   Future<void> _submitReport() async {
     if (_descriptionController.text.isEmpty) {
       _showSnackBar("Please write a description", Colors.orange);
@@ -49,8 +47,6 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      // Note: Image Firebase Storage-e upload korar jonno firebase_storage package lage. 
-      // Ekhon amra sudhu database entry korchi.
       await FirebaseFirestore.instance.collection('reports').add({
         'userId': user?.uid,
         'userName': user?.displayName ?? "Anonymous",
@@ -79,7 +75,11 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppTheme.darkBg, // ডার্ক ব্যাকগ্রাউন্ড
+      appBar: AppBar(
+        title: const Text("Report Incident", style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -87,46 +87,55 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
           children: [
             const Text(
               "Report an Incident",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
             ),
-            const Text("Your safety is our priority. Please provide details.", style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 25),
+            Text(
+              "Your safety is our priority. Please provide details.", 
+              style: TextStyle(color: Colors.white.withOpacity(0.5))
+            ),
+            const SizedBox(height: 30),
 
             // Incident Type Dropdown
             _buildLabel("Select Incident Type"),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[200]!),
+                color: AppTheme.cardColor,
+                borderRadius: BorderRadius.circular(15),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedType,
                   isExpanded: true,
-                  items: _incidentTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                  dropdownColor: AppTheme.cardColor, // ড্রপডাউন মেনু ডার্ক করা
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  items: _incidentTypes.map((type) => DropdownMenuItem(
+                    value: type, 
+                    child: Text(type)
+                  )).toList(),
                   onChanged: (val) => setState(() => _selectedType = val!),
                 ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
             // Description Box
             _buildLabel("Description"),
             TextField(
               controller: _descriptionController,
               maxLines: 5,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: "What happened? (Location, time, details...)",
-                fillColor: Colors.white,
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                fillColor: AppTheme.cardColor,
                 filled: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
             // Image Picker Section
             _buildLabel("Evidence (Photo)"),
@@ -134,46 +143,48 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
               onTap: _pickImage,
               child: Container(
                 width: double.infinity,
-                height: 150,
+                height: 180,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                  color: AppTheme.cardColor,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white10, width: 1),
                 ),
                 child: _selectedImage != null
                     ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(15),
                         child: Image.file(_selectedImage!, fit: BoxFit.cover),
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.add_a_photo_outlined, size: 40, color: AppTheme.primaryBlue),
-                          SizedBox(height: 8),
-                          Text("Click to add image", style: TextStyle(color: AppTheme.primaryBlue)),
+                        children: [
+                          Icon(Icons.add_a_photo_rounded, size: 50, color: AppTheme.primaryBlue.withOpacity(0.8)),
+                          const SizedBox(height: 10),
+                          const Text("Tap to upload evidence", style: TextStyle(color: Colors.white54)),
                         ],
                       ),
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 40),
 
             // Submit Button
             SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 60,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 5,
+                  shadowColor: AppTheme.primaryBlue.withOpacity(0.3),
                 ),
                 onPressed: _isUploading ? null : _submitReport,
                 child: _isUploading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("SUBMIT REPORT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    : const Text("SUBMIT REPORT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
               ),
             ),
+            const SizedBox(height: 100), // Navbar space
           ],
         ),
       ),
@@ -182,8 +193,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      padding: const EdgeInsets.only(left: 4, bottom: 10),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primaryBlue)),
     );
   }
 }
