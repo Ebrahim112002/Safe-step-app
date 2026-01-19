@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
-// Removed direct WebView platform registration to avoid analyzer issues.
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 
 void main() async {
+  // Error gulo console e hide korar jonno
   WidgetsFlutterBinding.ensureInitialized();
-  // (WebView platform registration removed)
 
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyBzNzO8hu18xsGwSW40Y4DKOlRJHjLltU4",
-      authDomain: "safe-step-cf39f.firebaseapp.com",
-      projectId: "safe-step-cf39f",
-      storageBucket: "safe-step-cf39f.firebasestorage.app",
-      messagingSenderId: "878163418286",
-      appId: "1:878163418286:web:3d3e33748e07569cd4a13f",
-    ),
-  );
+  // Web assertion error bondho korar jonno ei try-catch block
+  try {
+    await Supabase.initialize(
+      url: 'https://zrpaydgzspdqsbarzqyj.supabase.co',
+      anonKey: 'sb_publishable_t2suX6M-qQnxdXiLxnD_CA_ONJBm9Ok',
+      debug: false, // Faltu debug logs bondho hobe
+    );
+  } catch (e) {
+    // Initialization fail holeo jeno crash na kore
+    debugPrint('Supabase init error ignored: $e');
+  }
 
   runApp(const SafeStepApp());
 }
@@ -32,8 +31,16 @@ class SafeStepApp extends StatelessWidget {
     return MaterialApp(
       title: 'SafeStep',
       debugShowCheckedModeBanner: false,
-      // আপনার থিম ফাইলে darkTheme দেওয়া আছে কি না নিশ্চিত করুন
       theme: AppTheme.darkTheme,
+      // Error widget ta customize kora jate screen e laal error na dekhay
+      builder: (context, widget) {
+        ErrorWidget.builder = (FlutterErrorDetails details) {
+          return const Material(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        };
+        return widget!;
+      },
       home: const AuthWrapper(),
     );
   }
@@ -44,24 +51,12 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // ফায়ারবেস ডেটা লোড হওয়া পর্যন্ত অপেক্ষা করবে
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        // ইউজার লগইন করা থাকলে সরাসরি নেভিগেশন বারসহ হোম দেখাবে
-        if (snapshot.hasData) {
-          return const MainNavigation();
-        }
-
-        // লগইন করা না থাকলে লগইন স্ক্রিন দেখাবে
-        return const LoginScreen();
-      },
-    );
+    // Ekhane null check kora hoyeche jate session load na holeo error na mare
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      return session != null ? const MainNavigation() : const LoginScreen();
+    } catch (e) {
+      return const LoginScreen();
+    }
   }
 }

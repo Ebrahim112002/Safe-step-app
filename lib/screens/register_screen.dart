@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_theme.dart';
-import 'main_navigation.dart'; // HomeScreen এর বদলে MainNavigation
+import 'main_navigation.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -18,81 +16,75 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
 
   Future<void> _handleRegister() async {
-    if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+    if (_nameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _passwordController.text.isEmpty) {
       _showError("Please fill all fields");
       return;
     }
-    if (_passwordController.text.length < 6) {
-      _showError("Password must be at least 6 characters");
-      return;
-    }
-
     setState(() => _isLoading = true);
-
     try {
-      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final res = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
-      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-        'uid': userCredential.user!.uid,
-        'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        // সরাসরি MainNavigation এ পাঠাতে হবে যাতে Navbar লোড হয়
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigation()),
-          (route) => false,
-        );
+      if (res.user != null) {
+        await Supabase.instance.client.from('profiles').insert({
+          'id': res.user!.id,
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+        });
+        if (mounted)
+          Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (c) => const MainNavigation()),
+              (r) => false);
       }
-    } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? "An error occurred");
+    } catch (e) {
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
-  }
+  void _showError(String m) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBg, // ডার্ক ব্যাকগ্রাউন্ড
-      appBar: AppBar(elevation: 0, backgroundColor: Colors.transparent),
+      backgroundColor: AppTheme.darkBg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(25.0),
+        padding: const EdgeInsets.all(25),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Create Account", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text("Join SafeStep to stay protected.", style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            const SizedBox(height: 60),
+            const Text("Create Account",
+                style: TextStyle(
+                    fontSize: 32,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
-            _buildTextField("Full Name", Icons.person_outline, _nameController),
+            _buildField("Name", Icons.person, _nameController),
             const SizedBox(height: 20),
-            _buildTextField("Email Address", Icons.email_outlined, _emailController),
+            _buildField("Email", Icons.email, _emailController),
             const SizedBox(height: 20),
-            _buildTextField("Password", Icons.lock_outline, _passwordController, isPassword: true),
+            _buildField("Password", Icons.lock, _passwordController,
+                isPass: true),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               height: 60,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  elevation: 0,
-                ),
+                    backgroundColor: AppTheme.primaryBlue,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15))),
                 onPressed: _isLoading ? null : _handleRegister,
-                child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text("Sign Up", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Sign Up",
+                        style: TextStyle(color: Colors.white)),
               ),
             ),
           ],
@@ -101,19 +93,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildTextField(String label, IconData icon, TextEditingController controller, {bool isPassword = false}) {
+  Widget _buildField(String l, IconData i, TextEditingController c,
+      {bool isPass = false}) {
     return TextField(
-      controller: controller,
-      obscureText: isPassword,
+      controller: c,
+      obscureText: isPass,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white60),
-        prefixIcon: Icon(icon, color: AppTheme.primaryBlue),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-        filled: true,
-        fillColor: AppTheme.cardColor,
-      ),
+          labelText: l,
+          prefixIcon: Icon(i, color: AppTheme.primaryBlue),
+          filled: true,
+          fillColor: AppTheme.cardColor,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15))),
     );
   }
 }

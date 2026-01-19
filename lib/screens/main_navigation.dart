@@ -15,7 +15,6 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
 
-  // স্ক্রিন লিস্ট
   final List<Widget> _screens = [
     const HomeScreen(),
     const SafetyScreen(),
@@ -26,59 +25,42 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // extendBody: true দিলে বডি নেভিগেশন বারের নিচ পর্যন্ত বিস্তৃত হয়
-      extendBody: true, 
-      body: Stack(
-        children: [
-          // বর্তমান স্ক্রিন
-          _screens[_selectedIndex],
-          
-          // নিচের দিকে একটি হালকা গ্রাডিয়েন্ট যাতে নেভিগেশন বারের পেছনের লেখা বোঝা না যায়
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppTheme.darkBg.withOpacity(0.0),
-                    AppTheme.darkBg.withOpacity(0.8),
-                    AppTheme.darkBg,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      backgroundColor: AppTheme.darkBg,
+      // 1. extendBody false kora hoyeche jate content Navbar er upore thake
+      extendBody: false, 
+      
+      // 2. Stack bad diye sorasori screen load kora hoyeche
+      body: _screens[_selectedIndex],
+
+      // 3. Floating Navbar with its own space
       bottomNavigationBar: Container(
-        // margin দিয়ে বারটিকে ভাসমান রাখা হয়েছে
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-        height: 70,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1D1E33).withOpacity(0.95),
-          borderRadius: BorderRadius.circular(35),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(35),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navItem(Icons.home_outlined, Icons.home, "Home", 0),
-              _navItem(Icons.shield_outlined, Icons.shield, "Safety", 1),
-              _navItem(Icons.report_gmailerrorred, Icons.report, "Reports", 2),
-              _navItem(Icons.person_outline, Icons.person, "Profile", 3),
+        padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+        color: AppTheme.darkBg, // Navbar er pichone solid color jate content upore thake
+        child: Container(
+          height: 70,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1D1E33).withOpacity(0.95),
+            borderRadius: BorderRadius.circular(35),
+            border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(35),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navItem(Icons.home_outlined, Icons.home, "Home", 0),
+                _navItem(Icons.shield_outlined, Icons.shield, "Safety", 1),
+                _navItem(Icons.report_gmailerrorred, Icons.report, "Reports", 2),
+                _navItem(Icons.person_outline, Icons.person, "Profile", 3),
+              ],
+            ),
           ),
         ),
       ),
