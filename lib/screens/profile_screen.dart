@@ -35,7 +35,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // Image Pick & Upload Function
+  // --- FIXED IMAGE PICK & UPLOAD ---
   Future<void> _pickAndUploadImage() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -43,7 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 50, // Size komanor jonno
+      imageQuality: 50,
     );
 
     if (image == null) return;
@@ -52,19 +52,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final imageBytes = await image.readAsBytes();
-      final fileExt = image.path.split('.').last;
-      final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-      final filePath = fileName;
+      // Web-e path logic problematic, tai direct unique name create korchi
+      final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-      // 1. Supabase Storage e upload kora
+      // 1. Supabase Storage-e upload (ContentType fix kora hoyeche)
       await _supabase.storage.from('avatars').uploadBinary(
-            filePath,
+            fileName,
             imageBytes,
-            fileOptions: FileOptions(contentType: 'image/$fileExt', upsert: true),
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg', // Manual set korle ar media error ashbe na
+              upsert: true,
+            ),
           );
 
       // 2. Public URL ber kora
-      final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
+      final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
 
       // 3. Profiles table e image URL update kora
       await _supabase.from('profiles').update({
@@ -81,7 +83,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     } catch (e) {
-      debugPrint("Upload Error: $e");
+      debugPrint("Upload Error Detail: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Upload failed: $e")),
+        );
+      }
     } finally {
       setState(() => _isUploading = false);
     }
@@ -146,11 +153,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _supabase.from('profiles').stream(primaryKey: ['id']).eq('id', user?.id ?? ''),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting && !_isEditing) {
+            return const Center(child: CircularProgressIndicator());
+          }
           if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Profile Found"));
 
           final userData = snapshot.data!.first;
 
+          // Editing thakle controller data overwrite korbo na
           if (!_isEditing) {
             _nameController.text = userData['name'] ?? '';
             _phoneController.text = userData['phone'] ?? '';
@@ -164,15 +174,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // Image Section
+                // --- IMAGE SECTION WITH CACHE BREAKER ---
                 Center(
                   child: Stack(
                     children: [
                       CircleAvatar(
                         radius: 60,
                         backgroundColor: AppTheme.cardColor,
-                        backgroundImage: _imageUrl != null ? NetworkImage(_imageUrl!) : null,
-                        child: _imageUrl == null ? const Icon(Icons.person, size: 70, color: Colors.white24) : null,
+                        // Timestamp add kora hoyeche jate image sathe sathe refresh hoy
+                        backgroundImage: (_imageUrl != null && _imageUrl!.isNotEmpty)
+                            ? NetworkImage('$_imageUrl?t=${DateTime.now().millisecondsSinceEpoch}')
+                            : null,
+                        child: (_imageUrl == null || _imageUrl!.isEmpty)
+                            ? const Icon(Icons.person, size: 70, color: Colors.white24)
+                            : null,
                       ),
                       if (_isEditing)
                         Positioned(
@@ -208,7 +223,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryBlue,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
                       onPressed: _updateProfile,
                       child: const Text("Save Changes", style: TextStyle(color: Colors.white, fontSize: 16)),
                     ),
@@ -221,7 +239,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // (Ager buildGenderDropdown ebong buildInfoField method gulo ekhane thakbe...)
   Widget _buildGenderDropdown() {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -261,7 +278,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                TextField(controller: controller, enabled: _isEditing, style: const TextStyle(color: Colors.white, fontSize: 16), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.only(top: 5))),
+                TextField(
+                  controller: controller,
+                  enabled: _isEditing,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.only(top: 5)),
+                ),
               ],
             ),
           ),

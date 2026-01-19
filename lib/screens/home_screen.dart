@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore import
+import 'package:supabase_flutter/supabase_flutter.dart'; // Supabase import
 import '../core/app_theme.dart';
 import 'emergency_contacts_screen.dart';
 
@@ -13,9 +12,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   double _buttonScale = 1.0;
-  final User? currentUser = FirebaseAuth.instance.currentUser;
+  
+  // 1. Supabase client use korun Firebase bad diye
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // লাইভ টাইম অনুযায়ী গ্রিটিংস
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour >= 5 && hour < 12) return 'Good Morning';
@@ -36,6 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 2. Current User ID fetch kora
+    final userId = _supabase.auth.currentUser?.id;
+
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
       appBar: AppBar(
@@ -50,22 +53,26 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        // Firestore থেকে বর্তমান ইউজারের ডেটা লাইভ গেট করা হচ্ছে
-        stream: FirebaseFirestore.instance.collection('users').doc(currentUser?.uid).snapshots(),
+      // 3. Supabase stream use kora
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _supabase
+            .from('profiles')
+            .stream(primaryKey: ['id'])
+            .eq('id', userId ?? ''),
         builder: (context, snapshot) {
           String userName = "User";
-          
-          if (snapshot.hasData && snapshot.data!.exists) {
-            userName = snapshot.data!.get('name') ?? "User";
+
+          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            userName = snapshot.data!.first['name'] ?? "User";
           }
 
+          // Jodi snapshot error hoy ba loading hoy tao jeno UI hang na hoy
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // ১. সবার উপরে বড় SOS বাটন
                 const SizedBox(height: 10),
+                // SOS Button
                 Center(
                   child: GestureDetector(
                     onLongPressStart: (_) => setState(() => _buttonScale = 0.9),
@@ -102,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 35),
 
-                // ২. লাইভ গ্রিটিংস এবং Firestore থেকে আনা ইউজারের নাম
+                // Live Greetings
                 Column(
                   children: [
                     Text(
@@ -125,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // ৩. পাশাপাশি দুইটা বক্স
+                // Cards
                 Row(
                   children: [
                     _buildSquareCard("Safe Route", Icons.map_rounded, AppTheme.primaryBlue),
@@ -133,19 +140,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildSquareCard("Safety Heatmap", Icons.grain, AppTheme.accentPurple),
                   ],
                 ),
-                
                 const SizedBox(height: 25),
-
-                // ৪. AI Assessment কার্ড
                 _buildAssessmentCard(),
               ],
             ),
           );
-        }
+        },
       ),
     );
   }
 
+  // Card widgets (Apnar code e ja chilo tai thakbe...)
   Widget _buildSquareCard(String title, IconData icon, Color color) {
     return Expanded(
       child: Container(
@@ -161,11 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(icon, color: color, size: 40),
             const SizedBox(height: 12),
-            Text(
-              title, 
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)
-            ),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
           ],
         ),
       ),

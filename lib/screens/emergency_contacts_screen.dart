@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_theme.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
@@ -14,21 +13,32 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   bool _isLoading = false;
-  final User? user = FirebaseAuth.instance.currentUser;
+  
+  // Supabase Client
+  final _supabase = Supabase.instance.client;
 
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  // Contact Save Function
   Future<void> _saveContact() async {
-    if (_nameController.text.isEmpty || _phoneController.text.isEmpty) return;
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty) {
+      _showSnackBar("Please fill all fields", Colors.orange);
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .collection('contacts')
-          .add({
+      await _supabase.from('emergency_contacts').insert({
+        'user_id': user.id,
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
       });
       
       _nameController.clear();
@@ -36,6 +46,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       if (mounted) Navigator.pop(context); 
       _showSnackBar("Contact Saved!", Colors.green);
     } catch (e) {
+      debugPrint("Error: $e");
       _showSnackBar("Error saving contact", Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -48,6 +59,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     );
   }
 
+  // Add Contact Modal
   void _showAddContactModal() {
     showModalBottomSheet(
       context: context,
@@ -79,7 +91,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 ),
                 onPressed: _isLoading ? null : _saveContact,
                 child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Text("SAVE CONTACT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
@@ -108,43 +120,67 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = _supabase.auth.currentUser;
+
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
       appBar: AppBar(
-        title: const Text("Emergency Contacts"),
+        title: const Text("Emergency Contacts", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: StreamBuilder(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user!.uid)
-            .collection('contacts')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _supabase
+            .from('emergency_contacts')
+            .stream(primaryKey: ['id'])
+            .eq('user_id', user?.id ?? '')
+            .order('created_at'),
+        builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No contacts added yet.", style: TextStyle(color: Colors.white54)));
+
+          // 999 Default Logic
+          List<Map<String, dynamic>> contacts = [];
+          contacts.add({
+            'id': 'default',
+            'name': 'National Emergency',
+            'phone': '999',
+            'isDefault': true,
+          });
+
+          if (snapshot.hasData && snapshot.data != null) {
+            contacts.addAll(snapshot.data!);
           }
 
           return ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: snapshot.data!.docs.length,
+            itemCount: contacts.length,
             itemBuilder: (context, index) {
-              var doc = snapshot.data!.docs[index];
+              final contact = contacts[index];
+              final bool isDefault = contact['isDefault'] ?? false;
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(color: AppTheme.cardColor, borderRadius: BorderRadius.circular(15)),
+                decoration: BoxDecoration(
+                  color: isDefault ? AppTheme.primaryBlue.withOpacity(0.1) : AppTheme.cardColor, 
+                  borderRadius: BorderRadius.circular(15),
+                  border: isDefault ? Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)) : null,
+                ),
                 child: ListTile(
-                  leading: const CircleAvatar(backgroundColor: Colors.white10, child: Icon(Icons.person, color: Colors.white)),
-                  title: Text(doc['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text(doc['phone'], style: const TextStyle(color: Colors.white60)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppTheme.emergencyRed),
-                    onPressed: () => _deleteContact(doc.reference),
+                  leading: CircleAvatar(
+                    backgroundColor: isDefault ? AppTheme.emergencyRed : Colors.white10, 
+                    child: Icon(isDefault ? Icons.emergency : Icons.person, color: Colors.white)
                   ),
+                  title: Text(contact['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(contact['phone'], style: const TextStyle(color: Colors.white60)),
+                  trailing: isDefault 
+                    ? const Icon(Icons.lock_outline, color: Colors.white24, size: 20)
+                    : IconButton(
+                        icon: const Icon(Icons.delete_outline, color: AppTheme.emergencyRed),
+                        onPressed: () => _deleteContact(contact['id']),
+                      ),
                 ),
               );
             },
@@ -159,15 +195,23 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     );
   }
 
-  void _deleteContact(DocumentReference docRef) {
+  void _deleteContact(dynamic id) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardColor,
-        title: const Text("Delete?", style: TextStyle(color: Colors.white)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Delete Contact?", style: TextStyle(color: Colors.white)),
+        content: const Text("Are you sure you want to remove this contact?", style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          TextButton(onPressed: () { docRef.delete(); Navigator.pop(context); }, child: const Text("Delete", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () async { 
+              await _supabase.from('emergency_contacts').delete().eq('id', id);
+              if (mounted) Navigator.pop(context); 
+            }, 
+            child: const Text("Delete", style: TextStyle(color: Colors.red))
+          ),
         ],
       ),
     );
