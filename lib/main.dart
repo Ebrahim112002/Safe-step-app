@@ -3,20 +3,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
+import 'screens/splash_screen.dart'; // SplashScreen import koro
 
 void main() async {
-  // Error gulo console e hide korar jonno
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Web assertion error bondho korar jonno ei try-catch block
   try {
     await Supabase.initialize(
       url: 'https://zrpaydgzspdqsbarzqyj.supabase.co',
       anonKey: 'sb_publishable_t2suX6M-qQnxdXiLxnD_CA_ONJBm9Ok',
-      debug: false, // Faltu debug logs bondho hobe
+      debug: false,
     );
   } catch (e) {
-    // Initialization fail holeo jeno crash na kore
     debugPrint('Supabase init error ignored: $e');
   }
 
@@ -32,7 +30,6 @@ class SafeStepApp extends StatelessWidget {
       title: 'SafeStep',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      // Error widget ta customize kora jate screen e laal error na dekhay
       builder: (context, widget) {
         ErrorWidget.builder = (FlutterErrorDetails details) {
           return const Material(
@@ -41,22 +38,27 @@ class SafeStepApp extends StatelessWidget {
         };
         return widget!;
       },
-      home: const AuthWrapper(),
+      // App ekhon SplashScreen theke shuru hobe
+      home: const SplashScreen(),
     );
   }
 }
 
+// AuthWrapper decide korbe SplashScreen er por koi jabe
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Ekhane null check kora hoyeche jate session load na holeo error na mare
-    try {
-      final session = Supabase.instance.client.auth.currentSession;
-      return session != null ? const MainNavigation() : const LoginScreen();
-    } catch (e) {
+    // Session check logic
+    final session = Supabase.instance.client.auth.currentSession;
+
+    // Jodi user age login kora na thake (session null), tobe login e pathao
+    if (session == null) {
       return const LoginScreen();
+    } else {
+      // User login kora thakle direct Main Home e pathao
+      return const MainNavigation();
     }
   }
 }
