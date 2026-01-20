@@ -14,6 +14,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   double _buttonScale = 1.0;
   final SupabaseClient _supabase = Supabase.instance.client;
+  
+  // Dummy data for Safety Score
+  final double _safetyScore = 8.5;
 
   void _triggerSOS() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -42,13 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // 1. Sleek App Bar with Greetings & Fixed Spacing
+              // 1. Sleek App Bar (Greetings & Emergency Contacts Access)
               SliverAppBar(
                 expandedHeight: 120,
                 floating: true,
                 backgroundColor: AppTheme.darkBg,
                 elevation: 0,
-                // Left Side Contact Access
                 leading: Padding(
                   padding: const EdgeInsets.only(top: 10, left: 10),
                   child: IconButton(
@@ -60,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   titlePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   centerTitle: false,
                   title: Padding(
-                    padding: const EdgeInsets.only(top: 20), // Left button er niche space thik korar jonno
+                    padding: const EdgeInsets.only(top: 20),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +75,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 actions: [
-                  // Notification icon shoriye ekhane Profile/Manage icon dilam
                   Padding(
                     padding: const EdgeInsets.only(top: 10, right: 10),
                     child: IconButton(
@@ -89,26 +90,36 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Column(
                     children: [
-                      const SizedBox(height: 30), // Spacious look
+                      const SizedBox(height: 10),
                       
-                      // 2. SOS Button
+                      // 2. Safety Status Card
+                      _buildSafetyStatusCard(),
+
+                      const SizedBox(height: 35), 
+                      
+                      // 3. SOS Button
                       _buildSOSButton(),
                       
-                      const SizedBox(height: 50),
+                      const SizedBox(height: 45),
 
-                      // 3. Quick Actions (Bigger Buttons)
+                      // 4. Quick Actions (Horizontal Sleek Design)
                       _buildSectionTitle("Quick Actions"),
-                      const SizedBox(height: 20),
-                      _buildQuickActionGrid(),
+                      const SizedBox(height: 18),
+                      _buildQuickActionList(),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 35),
 
-                      // 4. Expert Safety Tip (Tumi cheyecho ami jeno dei)
+                      // 5. Safety Score Section
+                      _buildSafetyScoreSection(),
+
+                      const SizedBox(height: 30),
+
+                      // 6. Expert Safety Tip
                       _buildSafetyTipCard(),
 
                       const SizedBox(height: 40),
 
-                      // 5. Live Incidents List
+                      // 7. Live Incidents List Title
                       _buildSectionTitle("Nearby Live Reports"),
                       const SizedBox(height: 15),
                     ],
@@ -116,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // 6. Incident Stream
+              // 8. Incident Stream
               StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _supabase.from('reports').stream(primaryKey: ['id']).order('created_at'),
                 builder: (context, snapshot) {
@@ -152,6 +163,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- UI Components ---
 
+  Widget _buildSafetyStatusCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.greenAccent.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified_user_rounded, color: Colors.greenAccent, size: 20),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Your environment is Secure", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                Text("Real-time protection is active", style: TextStyle(color: Colors.white38, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSOSButton() {
     return GestureDetector(
       onLongPress: _triggerSOS,
@@ -161,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         scale: _buttonScale,
         duration: const Duration(milliseconds: 150),
         child: Container(
-          height: 200, width: 200, // Size increased
+          height: 200, width: 200,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppTheme.emergencyRed,
@@ -194,38 +231,105 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuickActionGrid() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildActionIcon(Icons.add_location_alt_rounded, "Report", Colors.orangeAccent, onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const IncidentReportScreen()));
-        }),
-        _buildActionIcon(Icons.group_add_rounded, "Contacts", Colors.greenAccent, isSpecial: true, onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const EmergencyContactsScreen()));
-        }),
-        _buildActionIcon(Icons.near_me_rounded, "Safe Path", Colors.blueAccent),
-        _buildActionIcon(Icons.shield_rounded, "Protection", Colors.purpleAccent),
-      ],
+  Widget _buildQuickActionList() {
+    return SizedBox(
+      height: 110,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          _buildActionCard(
+            Icons.add_location_alt_rounded, 
+            "Report", 
+            Colors.orangeAccent, 
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const IncidentReportScreen()))
+          ),
+          _buildActionCard(Icons.map_rounded, "Safe Path", Colors.blueAccent),
+          _buildActionCard(Icons.local_police_rounded, "Police", Colors.redAccent),
+          _buildActionCard(
+            Icons.group_add_rounded, 
+            "Contact", 
+            Colors.purpleAccent,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmergencyContactsScreen()))
+          ),
+          _buildActionCard(Icons.share_location_rounded, "Track Me", Colors.greenAccent),
+        ],
+      ),
     );
   }
 
-  Widget _buildActionIcon(IconData icon, String label, Color color, {VoidCallback? onTap, bool isSpecial = false}) {
+  Widget _buildActionCard(IconData icon, String label, Color color, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18), // Button size increased
-            decoration: BoxDecoration(
-              color: isSpecial ? color.withOpacity(0.12) : AppTheme.cardColor,
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(color: isSpecial ? color.withOpacity(0.4) : Colors.white.withOpacity(0.06)),
+      child: Container(
+        width: 100,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: AppTheme.cardColor,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: color.withOpacity(0.1), width: 1.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 26),
             ),
-            child: Icon(icon, color: color, size: 28),
+            const SizedBox(height: 10),
+            Text(
+              label, 
+              style: TextStyle(
+                color: color.withOpacity(0.9), 
+                fontSize: 12, 
+                fontWeight: FontWeight.bold
+              )
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSafetyScoreSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Your Safety Score", style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text("$_safetyScore", style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                  const Text("/10", style: TextStyle(color: Colors.white24, fontSize: 14)),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          Text(label, style: TextStyle(color: isSpecial ? color : Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryBlue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            onPressed: () {},
+            child: const Text("Check Up", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -238,7 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.2)),
         gradient: LinearGradient(
           colors: [AppTheme.cardColor, AppTheme.primaryBlue.withOpacity(0.05)],
           begin: Alignment.topLeft,
@@ -250,15 +353,15 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_circle_rounded, color: Colors.amberAccent, size: 26),
-              SizedBox(width: 10),
-              Text("Expert Safety Tip", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              Icon(Icons.lightbulb_outline_rounded, color: Colors.amberAccent, size: 22),
+              SizedBox(width: 8),
+              Text("Expert Safety Tip", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
             ],
           ),
           SizedBox(height: 12),
           Text(
-            "When walking alone at night, avoid using headphones. Staying alert to your surroundings is your first line of defense.",
-            style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.5),
+            "Avoid poorly lit paths even if they are shorter. Always prioritize well-trafficked roads during late hours.",
+            style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.6),
           ),
         ],
       ),
@@ -267,32 +370,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildIncidentCard(Map<String, dynamic> report) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.cardColor.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        color: AppTheme.cardColor.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(0.03)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.warning_rounded, color: Colors.redAccent, size: 22),
+            child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
           ),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(report['type'] ?? "Alert", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                const SizedBox(height: 4),
-                Text(report['description'] ?? "Incident reported nearby", style: const TextStyle(color: Colors.white38, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(report['type'] ?? "Alert", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(report['description'] ?? "Incident reported nearby", style: const TextStyle(color: Colors.white38, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white10, size: 16),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white10),
         ],
       ),
     );
@@ -301,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSectionTitle(String title) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
     );
   }
 }
