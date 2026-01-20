@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -64,7 +63,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     _existingImageUrl = incident['image_url'];
 
     if (incident['latitude'] != null && incident['longitude'] != null) {
-      _incidentLocation = latlng.LatLng(incident['latitude'], incident['longitude']);
+      _incidentLocation =
+          latlng.LatLng(incident['latitude'], incident['longitude']);
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) _mapController.move(_incidentLocation, 15.0);
       });
@@ -75,7 +75,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     try {
       Position position = await Geolocator.getCurrentPosition();
       if (mounted) {
-        setState(() => _incidentLocation = latlng.LatLng(position.latitude, position.longitude));
+        setState(() => _incidentLocation =
+            latlng.LatLng(position.latitude, position.longitude));
         _mapController.move(_incidentLocation, 15.0);
       }
     } catch (e) {
@@ -86,7 +87,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
   // Profile screen logic: Pick image as bytes
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    final XFile? image =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (image != null) {
       final bytes = await image.readAsBytes();
       setState(() {
@@ -99,7 +101,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    if (_descriptionController.text.trim().isEmpty || _fullAddressController.text.trim().isEmpty) {
+    if (_descriptionController.text.trim().isEmpty ||
+        _fullAddressController.text.trim().isEmpty) {
       _showSnackBar("Required fields missing", Colors.orange);
       return;
     }
@@ -111,12 +114,14 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
       // Profile screen er moto upload logic
       if (_imageBytes != null) {
-        final fileName = 'report_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final fileName =
+            'report_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
         await _supabase.storage.from('reports').uploadBinary(
-          fileName,
-          _imageBytes!,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-        );
+              fileName,
+              _imageBytes!,
+              fileOptions:
+                  const FileOptions(contentType: 'image/jpeg', upsert: true),
+            );
         imageUrl = _supabase.storage.from('reports').getPublicUrl(fileName);
       }
 
@@ -133,7 +138,10 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
       };
 
       if (_isEditing && _editingId != null) {
-        await _supabase.from('reports').update(reportData).eq('id', _editingId!);
+        await _supabase
+            .from('reports')
+            .update(reportData)
+            .eq('id', _editingId!);
       } else {
         reportData['created_at'] = DateTime.now().toIso8601String();
         await _supabase.from('reports').insert(reportData);
@@ -152,7 +160,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 
   @override
@@ -185,12 +194,13 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             _buildTextField(_descriptionController, "What happened?", 3),
             const SizedBox(height: 15),
             _buildLabel("6. Evidence (Optional)"),
-            
+
             // Image Preview logic fixed (using Image.memory for local bytes)
             GestureDetector(
               onTap: _isUploading ? null : _pickImage,
               child: Container(
-                width: 100, height: 100,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   color: AppTheme.cardColor,
                   borderRadius: BorderRadius.circular(12),
@@ -204,12 +214,14 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                     : (_existingImageUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(_existingImageUrl!, fit: BoxFit.cover),
+                            child: Image.network(_existingImageUrl!,
+                                fit: BoxFit.cover),
                           )
-                        : const Icon(Icons.add_a_photo, size: 25, color: Colors.white24)),
+                        : const Icon(Icons.add_a_photo,
+                            size: 25, color: Colors.white24)),
               ),
             ),
-            
+
             const SizedBox(height: 30),
             _buildSubmitButton(),
             const SizedBox(height: 20),
@@ -238,12 +250,15 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             onTap: (_, point) => setState(() => _incidentLocation = point),
           ),
           children: [
-            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
             MarkerLayer(markers: [
               Marker(
                 point: _incidentLocation,
-                width: 40, height: 40,
-                child: const Icon(Icons.location_on, color: Colors.red, size: 35),
+                width: 40,
+                height: 40,
+                child:
+                    const Icon(Icons.location_on, color: Colors.red, size: 35),
               ),
             ]),
           ],
@@ -254,21 +269,26 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
   Widget _buildSubmitButton() {
     return SizedBox(
-      width: double.infinity, height: 55,
+      width: double.infinity,
+      height: 55,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.primaryBlue,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: _isUploading ? null : _submitReport,
         child: _isUploading
             ? const SizedBox(
-                height: 20, width: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
               )
             : Text(
                 _isEditing ? "UPDATE REPORT" : "SUBMIT REPORT",
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold),
               ),
       ),
     );
@@ -276,10 +296,15 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
   Widget _buildLabel(String text) => Padding(
         padding: const EdgeInsets.only(left: 4, bottom: 6),
-        child: Text(text, style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 13)),
+        child: Text(text,
+            style: const TextStyle(
+                color: AppTheme.primaryBlue,
+                fontWeight: FontWeight.bold,
+                fontSize: 13)),
       );
 
-  Widget _buildTextField(TextEditingController ctrl, String hint, int lines) => TextField(
+  Widget _buildTextField(TextEditingController ctrl, String hint, int lines) =>
+      TextField(
         controller: ctrl,
         maxLines: lines,
         style: const TextStyle(color: Colors.white, fontSize: 14),
@@ -288,20 +313,25 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
           hintStyle: const TextStyle(color: Colors.white24),
           fillColor: AppTheme.cardColor,
           filled: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none),
         ),
       );
 
   Widget _buildDropdown() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(color: AppTheme.cardColor, borderRadius: BorderRadius.circular(15)),
+        decoration: BoxDecoration(
+            color: AppTheme.cardColor, borderRadius: BorderRadius.circular(15)),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: _selectedType,
             isExpanded: true,
             dropdownColor: AppTheme.cardColor,
             style: const TextStyle(color: Colors.white),
-            items: _incidentTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            items: _incidentTypes
+                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                .toList(),
             onChanged: (v) => setState(() => _selectedType = v!),
           ),
         ),

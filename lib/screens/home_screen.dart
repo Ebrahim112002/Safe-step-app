@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/app_theme.dart';
 import 'emergency_contacts_screen.dart';
+import 'emergency_emails_screen.dart' as email_screen; // নতুন ইমেইল ফাইল
 import 'incident_report_screen.dart';
+import 'safety_screen.dart'; // সেফটি স্ক্রিন
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,19 +17,61 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   double _buttonScale = 1.0;
+  bool _sosActive = false;
   final SupabaseClient _supabase = Supabase.instance.client;
-  
+
   // Dummy data for Safety Score
   final double _safetyScore = 8.5;
 
-  void _triggerSOS() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("🚨 SOS ALERT ACTIVATED!"),
-        backgroundColor: AppTheme.emergencyRed,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  // --- SOS Logic (SMS, Email & Location) ---
+  Future<void> _triggerSOS() async {
+    try {
+      // ১. বর্তমান লোকেশন নেওয়া
+      Position pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      String mapLink =
+          "https://www.google.com/maps?q=${pos.latitude},${pos.longitude}";
+      String message = "EMERGENCY! I need help. My location: $mapLink";
+
+      final userId = _supabase.auth.currentUser?.id;
+
+      // ২. ডাটাবেজ থেকে কন্টাক্ট এবং ইমেইল নিয়ে আসা
+      final contacts = await _supabase
+          .from('emergency_contacts')
+          .select('phone')
+          .eq('user_id', userId ?? '');
+      final emails = await _supabase
+          .from('emergency_emails')
+          .select('email')
+          .eq('user_id', userId ?? '');
+
+      // ৩. প্রথম কন্টাক্টকে SMS পাঠানোর জন্য ড্রাফট ওপেন করা
+      if (contacts.isNotEmpty) {
+        final phone = contacts.first['phone'];
+        final Uri smsUri = Uri.parse("sms:$phone?body=$message");
+        if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
+      }
+
+      // ৪. প্রথম ইমেইল অ্যাড্রেসে ড্রাফট ওপেন করা
+      if (emails.isNotEmpty) {
+        final email = emails.first['email'];
+        final Uri emailUri =
+            Uri.parse("mailto:$email?subject=SOS ALERT&body=$message");
+        if (await canLaunchUrl(emailUri)) await launchUrl(emailUri);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🚨 SOS ALERT ACTIVATED!"),
+            backgroundColor: AppTheme.emergencyRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("SOS Error: $e");
+    }
   }
 
   @override
@@ -35,7 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _supabase.from('profiles').stream(primaryKey: ['id']).eq('id', userId ?? ''),
+        stream: _supabase
+            .from('profiles')
+            .stream(primaryKey: ['id']).eq('id', userId ?? ''),
         builder: (context, snapshot) {
           String userName = "Ayaan";
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
@@ -45,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // 1. Sleek App Bar (Greetings & Emergency Contacts Access)
               SliverAppBar(
                 expandedHeight: 120,
                 floating: true,
@@ -54,12 +101,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: Padding(
                   padding: const EdgeInsets.only(top: 10, left: 10),
                   child: IconButton(
-                    icon: const Icon(Icons.contact_emergency_rounded, color: AppTheme.primaryBlue, size: 30),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmergencyContactsScreen())),
+                    icon: const Icon(Icons.contact_emergency_rounded,
+                        color: AppTheme.primaryBlue, size: 30),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                const EmergencyContactsScreen())),
                   ),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
-                  titlePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  titlePadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   centerTitle: false,
                   title: Padding(
                     padding: const EdgeInsets.only(top: 20),
@@ -67,76 +120,79 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Hi $userName! 👋", 
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        const Text("Stay safe today", style: TextStyle(color: Colors.white38, fontSize: 10)),
+                        Text("Hi $userName! 👋",
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                        const Text("Stay safe today",
+                            style:
+                                TextStyle(color: Colors.white38, fontSize: 10)),
                       ],
                     ),
                   ),
                 ),
                 actions: [
+                  // --- RIGHT SIDE EMAIL OPTION ---
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10, right: 5),
+                    child: IconButton(
+                      icon: const Icon(Icons.alternate_email_rounded,
+                          color: Colors.white70, size: 25),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  const email_screen.EmergencyEmailsScreen())),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.only(top: 10, right: 10),
                     child: IconButton(
-                      icon: const Icon(Icons.account_circle_outlined, color: Colors.white70, size: 28),
+                      icon: const Icon(Icons.account_circle_outlined,
+                          color: Colors.white70, size: 28),
                       onPressed: () {},
                     ),
                   ),
                 ],
               ),
-
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
-                      
-                      // 2. Safety Status Card
                       _buildSafetyStatusCard(),
-
-                      const SizedBox(height: 35), 
-                      
-                      // 3. SOS Button
+                      const SizedBox(height: 35),
                       _buildSOSButton(),
-                      
                       const SizedBox(height: 45),
-
-                      // 4. Quick Actions (Horizontal Sleek Design)
                       _buildSectionTitle("Quick Actions"),
                       const SizedBox(height: 18),
                       _buildQuickActionList(),
-
                       const SizedBox(height: 35),
-
-                      // 5. Safety Score Section
                       _buildSafetyScoreSection(),
-
                       const SizedBox(height: 30),
-
-                      // 6. Expert Safety Tip
                       _buildSafetyTipCard(),
-
                       const SizedBox(height: 40),
-
-                      // 7. Live Incidents List Title
                       _buildSectionTitle("Nearby Live Reports"),
                       const SizedBox(height: 15),
                     ],
                   ),
                 ),
               ),
-
-              // 8. Incident Stream
               StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _supabase.from('reports').stream(primaryKey: ['id']).order('created_at'),
+                stream: _supabase
+                    .from('reports')
+                    .stream(primaryKey: ['id']).order('created_at'),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return const SliverToBoxAdapter(
                       child: Center(
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Text("No incidents reported nearby.", style: TextStyle(color: Colors.white24, fontSize: 12)),
+                          child: Text("No incidents reported nearby.",
+                              style: TextStyle(
+                                  color: Colors.white24, fontSize: 12)),
                         ),
                       ),
                     );
@@ -145,14 +201,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 22),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildIncidentCard(snapshot.data![index]),
+                        (context, index) =>
+                            _buildIncidentCard(snapshot.data![index]),
                         childCount: snapshot.data!.length,
                       ),
                     ),
                   );
                 },
               ),
-
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           );
@@ -161,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UI Components ---
+  // --- UI Components ( ডিজাইন একদম আগের মতোই আছে ) ---
 
   Widget _buildSafetyStatusCard() {
     return Container(
@@ -173,14 +229,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: const Row(
         children: [
-          Icon(Icons.verified_user_rounded, color: Colors.greenAccent, size: 20),
+          Icon(Icons.verified_user_rounded,
+              color: Colors.greenAccent, size: 20),
           SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Your environment is Secure", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                Text("Real-time protection is active", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                Text("Your environment is Secure",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+                Text("Real-time protection is active",
+                    style: TextStyle(color: Colors.white38, fontSize: 11)),
               ],
             ),
           ),
@@ -198,16 +260,16 @@ class _HomeScreenState extends State<HomeScreen> {
         scale: _buttonScale,
         duration: const Duration(milliseconds: 150),
         child: Container(
-          height: 200, width: 200,
+          height: 200,
+          width: 200,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppTheme.emergencyRed,
             boxShadow: [
               BoxShadow(
-                color: AppTheme.emergencyRed.withOpacity(0.35), 
-                blurRadius: 50, 
-                spreadRadius: 10
-              ),
+                  color: AppTheme.emergencyRed.withOpacity(0.35),
+                  blurRadius: 50,
+                  spreadRadius: 10),
             ],
             gradient: const LinearGradient(
               colors: [AppTheme.emergencyRed, Color(0xFFD32F2F)],
@@ -221,8 +283,14 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Icon(Icons.gpp_maybe_rounded, color: Colors.white, size: 50),
                 SizedBox(height: 8),
-                Text("SOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 36, letterSpacing: 1.5)),
-                Text("Hold to Alert", style: TextStyle(color: Colors.white70, fontSize: 11)),
+                Text("SOS",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 36,
+                        letterSpacing: 1.5)),
+                Text("Hold to Alert",
+                    style: TextStyle(color: Colors.white70, fontSize: 11)),
               ],
             ),
           ),
@@ -232,42 +300,57 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickActionList() {
-    return SizedBox(
-      height: 110,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.95,
         children: [
           _buildActionCard(
-            Icons.add_location_alt_rounded, 
-            "Report", 
-            Colors.orangeAccent, 
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const IncidentReportScreen()))
-          ),
-          _buildActionCard(Icons.map_rounded, "Safe Path", Colors.blueAccent),
-          _buildActionCard(Icons.local_police_rounded, "Police", Colors.redAccent),
+              Icons.add_location_alt_rounded, "Report", Colors.orangeAccent,
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const IncidentReportScreen()))),
+          _buildActionCard(Icons.map_rounded, "Safe Path", Colors.blueAccent,
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const SafetyScreen()))),
           _buildActionCard(
-            Icons.group_add_rounded, 
-            "Contact", 
-            Colors.purpleAccent,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmergencyContactsScreen()))
-          ),
-          _buildActionCard(Icons.share_location_rounded, "Track Me", Colors.greenAccent),
+              Icons.local_police_rounded, "Police", Colors.redAccent),
+          _buildActionCard(Icons.email_rounded, "Email", Colors.tealAccent,
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          const email_screen.EmergencyEmailsScreen()))),
+          _buildActionCard(
+              Icons.group_add_rounded, "Contact", Colors.purpleAccent,
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const EmergencyContactsScreen()))),
+          _buildActionCard(
+              Icons.share_location_rounded, "Track Me", Colors.greenAccent),
         ],
       ),
     );
   }
 
-  Widget _buildActionCard(IconData icon, String label, Color color, {VoidCallback? onTap}) {
+  Widget _buildActionCard(IconData icon, String label, Color color,
+      {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 15),
         decoration: BoxDecoration(
           color: AppTheme.cardColor,
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: color.withOpacity(0.1), width: 1.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.2), width: 1.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -278,17 +361,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: color.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 26),
+              child: Icon(icon, color: color, size: 28),
             ),
-            const SizedBox(height: 10),
-            Text(
-              label, 
-              style: TextStyle(
-                color: color.withOpacity(0.9), 
-                fontSize: 12, 
-                fontWeight: FontWeight.bold
-              )
-            ),
+            const SizedBox(height: 8),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: color.withOpacity(0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -309,14 +390,20 @@ class _HomeScreenState extends State<HomeScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Your Safety Score", style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Text("Your Safety Score",
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
               const SizedBox(height: 4),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text("$_safetyScore", style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                  const Text("/10", style: TextStyle(color: Colors.white24, fontSize: 14)),
+                  Text("$_safetyScore",
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold)),
+                  const Text("/10",
+                      style: TextStyle(color: Colors.white24, fontSize: 14)),
                 ],
               ),
             ],
@@ -324,11 +411,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 0,
             ),
             onPressed: () {},
-            child: const Text("Check Up", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            child: const Text("Check Up",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -353,9 +445,14 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_outline_rounded, color: Colors.amberAccent, size: 22),
+              Icon(Icons.lightbulb_outline_rounded,
+                  color: Colors.amberAccent, size: 22),
               SizedBox(width: 8),
-              Text("Expert Safety Tip", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              Text("Expert Safety Tip",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14)),
             ],
           ),
           SizedBox(height: 12),
@@ -381,16 +478,26 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+            decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.1),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: Colors.redAccent, size: 20),
           ),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(report['type'] ?? "Alert", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(report['description'] ?? "Incident reported nearby", style: const TextStyle(color: Colors.white38, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(report['type'] ?? "Alert",
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+                Text(report['description'] ?? "Incident reported nearby",
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -403,7 +510,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSectionTitle(String title) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+      child: Text(title,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5)),
     );
   }
 }

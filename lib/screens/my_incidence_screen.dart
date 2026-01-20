@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -48,13 +47,14 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
   // --- FIXED IMAGE UPDATE (Binary Logic) ---
   Future<void> _updateImage(dynamic reportId) async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    final XFile? image =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
 
     if (image == null) return;
 
     try {
       setState(() => _isLoading = true);
-      
+
       final imageBytes = await image.readAsBytes();
       final fileName = 'upd_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
@@ -62,18 +62,18 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
       await supabase.storage.from('reports').uploadBinary(
             fileName,
             imageBytes,
-            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+            fileOptions:
+                const FileOptions(contentType: 'image/jpeg', upsert: true),
           );
-      
+
       final imageUrl = supabase.storage.from('reports').getPublicUrl(fileName);
 
       // 2. Database আপডেট (ID টাইপ ফিক্স করা হয়েছে)
       await supabase
           .from('reports')
-          .update({'image_url': imageUrl})
-          .eq('id', reportId);
+          .update({'image_url': imageUrl}).eq('id', reportId);
 
-      _fetchMyReports(); 
+      _fetchMyReports();
       _showSnackBar("Image updated!", Colors.green);
     } catch (e) {
       debugPrint("Image Update Error: $e");
@@ -88,7 +88,7 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
     try {
       // সরাসরি ডিলিট কুয়েরি
       await supabase.from('reports').delete().eq('id', id);
-      
+
       if (mounted) {
         _showSnackBar("Report deleted", Colors.blueGrey);
         _fetchMyReports(); // লিস্ট রিফ্রেশ
@@ -103,7 +103,8 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
   void _showEditDialog(Map<String, dynamic> report) {
     final typeController = TextEditingController(text: report['type']);
     final descController = TextEditingController(text: report['description']);
-    final roadController = TextEditingController(text: report['road_number']?.toString() ?? "");
+    final roadController =
+        TextEditingController(text: report['road_number']?.toString() ?? "");
 
     showDialog(
       context: context,
@@ -126,10 +127,12 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+            child:
+                const Text("Cancel", style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
             onPressed: () async {
               try {
                 await supabase.from('reports').update({
@@ -156,11 +159,13 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
 
   void _showSnackBar(String msg, Color color) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
     }
   }
 
-  Widget _buildField(TextEditingController controller, String label, {int maxLines = 1}) {
+  Widget _buildField(TextEditingController controller, String label,
+      {int maxLines = 1}) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -170,7 +175,9 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
         labelStyle: const TextStyle(color: Colors.white38),
         filled: true,
         fillColor: Colors.white.withOpacity(0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
       ),
     );
   }
@@ -179,17 +186,24 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
-      appBar: AppBar(title: const Text("MY REPORTS"), centerTitle: true, backgroundColor: Colors.transparent),
+      appBar: AppBar(
+          title: const Text("MY REPORTS"),
+          centerTitle: true,
+          backgroundColor: Colors.transparent),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _myReports.isEmpty
-              ? const Center(child: Text("No reports found", style: TextStyle(color: Colors.white54)))
+              ? const Center(
+                  child: Text("No reports found",
+                      style: TextStyle(color: Colors.white54)))
               : RefreshIndicator(
                   onRefresh: _fetchMyReports,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: _myReports.length,
-                    itemBuilder: (context, index) => _buildReportCard(_myReports[index]),
+                    itemBuilder: (context, index) =>
+                        _buildReportCard(_myReports[index]),
                   ),
                 ),
     );
@@ -214,25 +228,38 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
                   borderRadius: BorderRadius.circular(15),
                   child: Image.network(
                     report['image_url'],
-                    height: 180, width: double.infinity, fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(height: 180, color: Colors.white10, child: const Icon(Icons.broken_image, color: Colors.white24)),
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                        height: 180,
+                        color: Colors.white10,
+                        child: const Icon(Icons.broken_image,
+                            color: Colors.white24)),
                   ),
                 ),
               Positioned(
-                right: 10, bottom: 10,
+                right: 10,
+                bottom: 10,
                 child: FloatingActionButton.small(
                   heroTag: "btn_${report['id']}",
                   backgroundColor: AppTheme.primaryBlue,
                   onPressed: () => _updateImage(report['id']),
-                  child: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 20),
+                  child: const Icon(Icons.camera_alt_outlined,
+                      color: Colors.white, size: 20),
                 ),
               )
             ],
           ),
           const SizedBox(height: 15),
-          Text(report['type'] ?? 'Unknown', style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+          Text(report['type'] ?? 'Unknown',
+              style: const TextStyle(
+                  color: AppTheme.primaryBlue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18)),
           const SizedBox(height: 8),
-          Text(report['description'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          Text(report['description'] ?? '',
+              style: const TextStyle(color: Colors.white70, fontSize: 14)),
           const Divider(color: Colors.white10, height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -246,7 +273,8 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
               TextButton.icon(
                 onPressed: () => _deleteReport(report['id']),
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                label: const Text("Delete", style: TextStyle(color: Colors.redAccent)),
+                label: const Text("Delete",
+                    style: TextStyle(color: Colors.redAccent)),
               ),
             ],
           )

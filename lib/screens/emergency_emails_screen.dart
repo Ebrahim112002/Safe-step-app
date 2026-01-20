@@ -10,55 +10,180 @@ class EmergencyEmailsScreen extends StatefulWidget {
 }
 
 class _EmergencyEmailsScreenState extends State<EmergencyEmailsScreen> {
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
-  final _supabase = Supabase.instance.client;
+  final _emailController = TextEditingController(); // ইমেইল কন্ট্রোলার
   bool _isLoading = false;
+  final _supabase = Supabase.instance.client;
 
-  Future<void> _saveEmail() async {
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveContact() async {
     final user = _supabase.auth.currentUser;
-    if (_emailController.text.isEmpty) return;
+    if (user == null) return;
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty) {
+      _showSnackBar("Please fill Name and Phone", Colors.orange);
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
-      await _supabase.from('emergency_emails').insert({
-        'user_id': user?.id,
+      await _supabase.from('emergency_contacts').insert({
+        'user_id': user.id,
         'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
       });
-      _emailController.clear();
+
       _nameController.clear();
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Email Saved!")));
+      _phoneController.clear();
+      _emailController.clear();
+      if (mounted) Navigator.pop(context);
+      _showSnackBar("Contact Saved Successfully!", Colors.green);
     } catch (e) {
-      debugPrint("Error: $e");
+      _showSnackBar("Error: $e", Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(msg),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  void _showAddContactModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.darkBg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 25,
+            right: 25,
+            top: 30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Add Emergency Contact",
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+            const SizedBox(height: 25),
+            _buildInput(_nameController, "Full Name", Icons.person_outline),
+            const SizedBox(height: 15),
+            _buildInput(_phoneController, "Phone Number", Icons.phone_outlined,
+                isPhone: true),
+            const SizedBox(height: 15),
+            _buildInput(
+                _emailController, "Email (Optional)", Icons.email_outlined),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15))),
+                onPressed: _isLoading ? null : _saveContact,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("SAVE CONTACT",
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 30),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput(TextEditingController ctrl, String label, IconData icon,
+      {bool isPhone = false}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: isPhone ? TextInputType.phone : TextInputType.emailAddress,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: Icon(icon, color: AppTheme.primaryBlue),
+        fillColor: AppTheme.cardColor,
+        filled: true,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = _supabase.auth.currentUser;
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
-      appBar: AppBar(title: const Text("Emergency Emails"), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+          title: const Text("Emergency Contacts"),
+          centerTitle: true,
+          backgroundColor: Colors.transparent),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _supabase.from('emergency_emails').stream(primaryKey: ['id']).eq('user_id', _supabase.auth.currentUser?.id ?? ''),
+        stream: _supabase
+            .from('emergency_contacts')
+            .stream(primaryKey: ['id'])
+            .eq('user_id', user?.id ?? '')
+            .order('created_at'),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+
+          List<Map<String, dynamic>> contacts = snapshot.data!;
           return ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: snapshot.data!.length,
+            itemCount: contacts.length,
             itemBuilder: (context, index) {
-              final item = snapshot.data![index];
-              return Card(
-                color: AppTheme.cardColor,
+              final contact = contacts[index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                    color: AppTheme.cardColor,
+                    borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
-                  title: Text(item['name'] ?? 'No Name', style: const TextStyle(color: Colors.white)),
-                  subtitle: Text(item['email'], style: const TextStyle(color: Colors.white70)),
+                  leading: const CircleAvatar(
+                      backgroundColor: Colors.white10,
+                      child: Icon(Icons.person, color: Colors.white)),
+                  title: Text(contact['name'],
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      "${contact['phone']}\n${contact['email'] ?? ''}",
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12)),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () async => await _supabase.from('emergency_emails').delete().eq('id', item['id']),
+                    icon: const Icon(Icons.delete_outline,
+                        color: AppTheme.emergencyRed),
+                    onPressed: () async => await _supabase
+                        .from('emergency_contacts')
+                        .delete()
+                        .eq('id', contact['id']),
                   ),
                 ),
               );
@@ -67,32 +192,9 @@ class _EmergencyEmailsScreenState extends State<EmergencyEmailsScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: AppTheme.primaryBlue,
-        onPressed: () => _showAddDialog(),
-        child: const Icon(Icons.add_email_rounded, color: Colors.white),
-      ),
-    );
-  }
-
-  void _showAddDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppTheme.darkBg,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Name"), style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 10),
-            TextField(controller: _emailController, decoration: const InputDecoration(labelText: "Email"), style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 20),
-            ElevatedButton(onPressed: _saveEmail, child: const Text("SAVE")),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+          backgroundColor: AppTheme.primaryBlue,
+          onPressed: _showAddContactModal,
+          child: const Icon(Icons.add, color: Colors.white)),
     );
   }
 }
