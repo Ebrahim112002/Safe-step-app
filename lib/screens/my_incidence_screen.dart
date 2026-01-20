@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -40,46 +40,68 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
         });
       }
     } catch (e) {
+      debugPrint("Fetch Error: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _updateImage(String reportId) async {
+  // --- FIXED IMAGE UPDATE (Binary Logic) ---
+  Future<void> _updateImage(dynamic reportId) async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+
     if (image == null) return;
 
     try {
       setState(() => _isLoading = true);
-      final file = File(image.path);
+      
+      final imageBytes = await image.readAsBytes();
       final fileName = 'upd_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final path = 'reports/$fileName';
 
-      await supabase.storage.from('report_images').upload(path, file);
-      final imageUrl = supabase.storage.from('report_images').getPublicUrl(path);
+      // 1. Storage এ আপলোড
+      await supabase.storage.from('reports').uploadBinary(
+            fileName,
+            imageBytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+          );
+      
+      final imageUrl = supabase.storage.from('reports').getPublicUrl(fileName);
 
-      await supabase.from('reports').update({'image_url': imageUrl}).eq('id', reportId);
-      _fetchMyReports();
+      // 2. Database আপডেট (ID টাইপ ফিক্স করা হয়েছে)
+      await supabase
+          .from('reports')
+          .update({'image_url': imageUrl})
+          .eq('id', reportId);
+
+      _fetchMyReports(); 
+      _showSnackBar("Image updated!", Colors.green);
     } catch (e) {
       debugPrint("Image Update Error: $e");
+      _showSnackBar("Update failed: $e", Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _deleteReport(String id) async {
+  // --- FIXED DELETE LOGIC ---
+  Future<void> _deleteReport(dynamic id) async {
     try {
+      // সরাসরি ডিলিট কুয়েরি
       await supabase.from('reports').delete().eq('id', id);
-      setState(() {
-        _myReports.removeWhere((item) => item['id'].toString() == id);
-      });
+      
+      if (mounted) {
+        _showSnackBar("Report deleted", Colors.blueGrey);
+        _fetchMyReports(); // লিস্ট রিফ্রেশ
+      }
     } catch (e) {
       debugPrint("Delete Error: $e");
+      _showSnackBar("Delete failed: $e", Colors.red);
     }
   }
 
+  // --- FIXED TEXT UPDATE LOGIC ---
   void _showEditDialog(Map<String, dynamic> report) {
-    final titleController = TextEditingController(text: report['type']);
+    final typeController = TextEditingController(text: report['type']);
     final descController = TextEditingController(text: report['description']);
     final roadController = TextEditingController(text: report['road_number']?.toString() ?? "");
 
@@ -93,7 +115,7 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildField(titleController, "Type"),
+              _buildField(typeController, "Type"),
               const SizedBox(height: 15),
               _buildField(descController, "Description", maxLines: 3),
               const SizedBox(height: 15),
@@ -102,23 +124,40 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
             onPressed: () async {
-              await supabase.from('reports').update({
-                'type': titleController.text,
-                'description': descController.text,
-                'road_number': roadController.text,
-              }).eq('id', report['id']);
-              Navigator.pop(context);
-              _fetchMyReports();
+              try {
+                await supabase.from('reports').update({
+                  'type': typeController.text.trim(),
+                  'description': descController.text.trim(),
+                  'road_number': roadController.text.trim(),
+                }).eq('id', report['id']);
+
+                if (mounted) Navigator.pop(context);
+                _fetchMyReports();
+                _showSnackBar("Updated successfully!", Colors.green);
+              } catch (e) {
+                _showSnackBar("Update failed", Colors.red);
+              }
             },
             child: const Text("Update", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
+
+  // --- UI Helpers ---
+
+  void _showSnackBar(String msg, Color color) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    }
   }
 
   Widget _buildField(TextEditingController controller, String label, {int maxLines = 1}) {
@@ -140,14 +179,19 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.darkBg,
-      appBar: AppBar(title: const Text("MY REPORTS"), centerTitle: true, elevation: 0, backgroundColor: Colors.transparent),
-      body: _isLoading 
+      appBar: AppBar(title: const Text("MY REPORTS"), centerTitle: true, backgroundColor: Colors.transparent),
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: _myReports.length,
-              itemBuilder: (context, index) => _buildReportCard(_myReports[index]),
-            ),
+          : _myReports.isEmpty
+              ? const Center(child: Text("No reports found", style: TextStyle(color: Colors.white54)))
+              : RefreshIndicator(
+                  onRefresh: _fetchMyReports,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: _myReports.length,
+                    itemBuilder: (context, index) => _buildReportCard(_myReports[index]),
+                  ),
+                ),
     );
   }
 
@@ -155,7 +199,11 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: AppTheme.cardColor, borderRadius: BorderRadius.circular(25)),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,29 +212,42 @@ class _MyIncidenceScreenState extends State<MyIncidenceScreen> {
               if (report['image_url'] != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(15),
-                  child: Image.network(report['image_url'], height: 160, width: double.infinity, fit: BoxFit.cover),
+                  child: Image.network(
+                    report['image_url'],
+                    height: 180, width: double.infinity, fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(height: 180, color: Colors.white10, child: const Icon(Icons.broken_image, color: Colors.white24)),
+                  ),
                 ),
               Positioned(
-                right: 8, bottom: 8,
+                right: 10, bottom: 10,
                 child: FloatingActionButton.small(
+                  heroTag: "btn_${report['id']}",
                   backgroundColor: AppTheme.primaryBlue,
-                  onPressed: () => _updateImage(report['id'].toString()),
-                  child: const Icon(Icons.edit_outlined, color: Colors.white),
+                  onPressed: () => _updateImage(report['id']),
+                  child: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 20),
                 ),
               )
             ],
           ),
           const SizedBox(height: 15),
-          Text(report['type'] ?? '', style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 5),
-          Text(report['description'] ?? '', style: const TextStyle(color: Colors.white70)),
+          Text(report['type'] ?? 'Unknown', style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 8),
+          Text(report['description'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
           const Divider(color: Colors.white10, height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton.icon(onPressed: () => _showEditDialog(report), icon: const Icon(Icons.edit, size: 18), label: const Text("Edit")),
-              const SizedBox(width: 15),
-              TextButton.icon(onPressed: () => _deleteReport(report['id'].toString()), icon: const Icon(Icons.delete, color: Colors.redAccent, size: 18), label: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
+              TextButton.icon(
+                onPressed: () => _showEditDialog(report),
+                icon: const Icon(Icons.edit_note),
+                label: const Text("Edit"),
+              ),
+              const SizedBox(width: 10),
+              TextButton.icon(
+                onPressed: () => _deleteReport(report['id']),
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                label: const Text("Delete", style: TextStyle(color: Colors.redAccent)),
+              ),
             ],
           )
         ],

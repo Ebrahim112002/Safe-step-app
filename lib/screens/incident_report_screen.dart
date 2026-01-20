@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlng;
@@ -8,7 +10,6 @@ import '../core/app_theme.dart';
 
 class IncidentReportScreen extends StatefulWidget {
   final Map<String, dynamic>? incidentToEdit;
-
   const IncidentReportScreen({super.key, this.incidentToEdit});
 
   @override
@@ -18,15 +19,15 @@ class IncidentReportScreen extends StatefulWidget {
 class _IncidentReportScreenState extends State<IncidentReportScreen> {
   final _supabase = Supabase.instance.client;
 
-  // Controllers for new fields
+  // Controllers
   final _descriptionController = TextEditingController();
   final _roadController = TextEditingController();
   final _fullAddressController = TextEditingController();
-
   final MapController _mapController = MapController();
 
+  // States
   String _selectedType = 'Harassment';
-  XFile? _selectedImage;
+  Uint8List? _imageBytes; // Profile screen logic: Binary data for stability
   String? _existingImageUrl;
   bool _isUploading = false;
   bool _isEditing = false;
@@ -63,12 +64,9 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     _existingImageUrl = incident['image_url'];
 
     if (incident['latitude'] != null && incident['longitude'] != null) {
-      _incidentLocation =
-          latlng.LatLng(incident['latitude'], incident['longitude']);
+      _incidentLocation = latlng.LatLng(incident['latitude'], incident['longitude']);
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          _mapController.move(_incidentLocation, 15.0);
-        }
+        if (mounted) _mapController.move(_incidentLocation, 15.0);
       });
     }
   }
@@ -76,13 +74,24 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
   Future<void> _setInitialLocation() async {
     try {
       Position position = await Geolocator.getCurrentPosition();
-      setState(() {
-        _incidentLocation =
-            latlng.LatLng(position.latitude, position.longitude);
-      });
-      _mapController.move(_incidentLocation, 15.0);
+      if (mounted) {
+        setState(() => _incidentLocation = latlng.LatLng(position.latitude, position.longitude));
+        _mapController.move(_incidentLocation, 15.0);
+      }
     } catch (e) {
       debugPrint("Location Error: $e");
+    }
+  }
+
+  // Profile screen logic: Pick image as bytes
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        _imageBytes = bytes;
+      });
     }
   }
 
@@ -90,10 +99,8 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    // Required Field Validation
-    if (_descriptionController.text.trim().isEmpty ||
-        _fullAddressController.text.trim().isEmpty) {
-      _showSnackBar("Description and Full Address are required", Colors.orange);
+    if (_descriptionController.text.trim().isEmpty || _fullAddressController.text.trim().isEmpty) {
+      _showSnackBar("Required fields missing", Colors.orange);
       return;
     }
 
@@ -102,21 +109,20 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     try {
       String? imageUrl = _existingImageUrl;
 
-      // Only upload new image if selected
-      if (_selectedImage != null) {
-        final bytes = await _selectedImage!.readAsBytes();
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // Profile screen er moto upload logic
+      if (_imageBytes != null) {
+        final fileName = 'report_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
         await _supabase.storage.from('reports').uploadBinary(
-              'incident_reports/$fileName',
-              bytes,
-              fileOptions: const FileOptions(contentType: 'image/jpeg'),
-            );
-        imageUrl = _supabase.storage
-            .from('reports')
-            .getPublicUrl('incident_reports/$fileName');
+          fileName,
+          _imageBytes!,
+          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+        );
+        imageUrl = _supabase.storage.from('reports').getPublicUrl(fileName);
       }
 
+      // Backend Table: 'reports' table structure
       final reportData = {
+        'user_id': user.id,
         'type': _selectedType,
         'description': _descriptionController.text.trim(),
         'road_number': _roadController.text.trim(),
@@ -127,38 +133,26 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
       };
 
       if (_isEditing && _editingId != null) {
-        // Update existing incident
-        await _supabase
-            .from('reports')
-            .update(reportData)
-            .eq('id', _editingId!);
-        if (mounted) {
-          _showSnackBar("Incident Updated Successfully!", Colors.green);
-          Navigator.pop(context);
-        }
+        await _supabase.from('reports').update(reportData).eq('id', _editingId!);
       } else {
-        // Create new incident
-        reportData['user_id'] = user.id;
         reportData['created_at'] = DateTime.now().toIso8601String();
-
         await _supabase.from('reports').insert(reportData);
-        if (mounted) {
-          _showSnackBar("Incident Reported Successfully!", Colors.green);
-          Navigator.pop(context);
-        }
+      }
+
+      if (mounted) {
+        _showSnackBar("Successfully Saved!", Colors.green);
+        Navigator.pop(context, true);
       }
     } catch (e) {
-      debugPrint("Full Error: $e");
-      _showSnackBar("Submission failed. Please try again.", Colors.red);
+      debugPrint("DB Error: $e");
+      _showSnackBar("Failed to save. Check your table columns.", Colors.red);
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: color),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 
   @override
@@ -176,137 +170,48 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildLabel("1. Pin Incident Location *"),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                border:
-                    Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _incidentLocation,
-                    initialZoom: 15.0,
-                    onTap: (tapPos, point) =>
-                        setState(() => _incidentLocation = point),
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c'],
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: _incidentLocation,
-                          width: 40,
-                          height: 40,
-                          child: const Icon(Icons.location_on,
-                              color: Colors.red, size: 35),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            _buildMapContainer(),
             const SizedBox(height: 20),
-            _buildLabel("2. Road/Area Name (Optional)"),
-            _buildTextField(_roadController, "e.g. Road 12, Block C", 1),
+            _buildLabel("2. Road/Area (Optional)"),
+            _buildTextField(_roadController, "e.g. Road 12", 1),
             const SizedBox(height: 15),
             _buildLabel("3. Full Address Details *"),
-            _buildTextField(
-                _fullAddressController, "Enter full address for clarity...", 2),
+            _buildTextField(_fullAddressController, "Enter address...", 2),
             const SizedBox(height: 15),
             _buildLabel("4. Incident Type *"),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardColor,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedType,
-                  isExpanded: true,
-                  dropdownColor: AppTheme.cardColor,
-                  style: const TextStyle(color: Colors.white),
-                  items: _incidentTypes
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedType = v!),
-                ),
-              ),
-            ),
+            _buildDropdown(),
             const SizedBox(height: 15),
             _buildLabel("5. Description *"),
-            _buildTextField(
-                _descriptionController, "What exactly happened?", 3),
+            _buildTextField(_descriptionController, "What happened?", 3),
             const SizedBox(height: 15),
-            _buildLabel("6. Add/Change Evidence (Optional)"),
+            _buildLabel("6. Evidence (Optional)"),
+            
+            // Image Preview logic fixed (using Image.memory for local bytes)
             GestureDetector(
-              onTap: () async {
-                final XFile? image = await ImagePicker()
-                    .pickImage(source: ImageSource.gallery, imageQuality: 50);
-                if (image != null) setState(() => _selectedImage = image);
-              },
+              onTap: _isUploading ? null : _pickImage,
               child: Container(
-                width: 100,
-                height: 100,
+                width: 100, height: 100,
                 decoration: BoxDecoration(
                   color: AppTheme.cardColor,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white10),
                 ),
-                child: _selectedImage != null
+                child: _imageBytes != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          _selectedImage != null
-                              ? _selectedImage! as dynamic
-                              : null,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.memory(_imageBytes!, fit: BoxFit.cover),
                       )
-                    : (_existingImageUrl != null && !_isEditing
+                    : (_existingImageUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              _existingImageUrl!,
-                              fit: BoxFit.cover,
-                            ),
+                            child: Image.network(_existingImageUrl!, fit: BoxFit.cover),
                           )
-                        : const Icon(Icons.add_a_photo,
-                            size: 25, color: Colors.white24)),
+                        : const Icon(Icons.add_a_photo, size: 25, color: Colors.white24)),
               ),
             ),
+            
             const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: _isUploading ? null : _submitReport,
-                child: _isUploading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                        _isEditing ? "UPDATE REPORT" : "SUBMIT REPORT",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
+            _buildSubmitButton(),
             const SizedBox(height: 20),
           ],
         ),
@@ -314,40 +219,93 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppTheme.primaryBlue,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
+  // --- UI Components ---
+
+  Widget _buildMapContainer() {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _incidentLocation,
+            initialZoom: 15.0,
+            onTap: (_, point) => setState(() => _incidentLocation = point),
+          ),
+          children: [
+            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            MarkerLayer(markers: [
+              Marker(
+                point: _incidentLocation,
+                width: 40, height: 40,
+                child: const Icon(Icons.location_on, color: Colors.red, size: 35),
+              ),
+            ]),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField(
-      TextEditingController controller, String hint, int lines) {
-    return TextField(
-      controller: controller,
-      maxLines: lines,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24, fontSize: 13),
-        fillColor: AppTheme.cardColor,
-        filled: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity, height: 55,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryBlue,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
+        onPressed: _isUploading ? null : _submitReport,
+        child: _isUploading
+            ? const SizedBox(
+                height: 20, width: 20,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              )
+            : Text(
+                _isEditing ? "UPDATE REPORT" : "SUBMIT REPORT",
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
       ),
     );
   }
+
+  Widget _buildLabel(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 6),
+        child: Text(text, style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold, fontSize: 13)),
+      );
+
+  Widget _buildTextField(TextEditingController ctrl, String hint, int lines) => TextField(
+        controller: ctrl,
+        maxLines: lines,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white24),
+          fillColor: AppTheme.cardColor,
+          filled: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        ),
+      );
+
+  Widget _buildDropdown() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(color: AppTheme.cardColor, borderRadius: BorderRadius.circular(15)),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedType,
+            isExpanded: true,
+            dropdownColor: AppTheme.cardColor,
+            style: const TextStyle(color: Colors.white),
+            items: _incidentTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            onChanged: (v) => setState(() => _selectedType = v!),
+          ),
+        ),
+      );
 
   @override
   void dispose() {
