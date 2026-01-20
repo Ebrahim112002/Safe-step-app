@@ -61,16 +61,41 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (mounted) {
+        setState(() => _sosActive = true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("🚨 SOS ALERT ACTIVATED!"),
+            content: Text("🚨 SOS ALERT ACTIVATED! Tap button to turn off."),
             backgroundColor: AppTheme.emergencyRed,
             behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 5),
           ),
         );
       }
     } catch (e) {
       debugPrint("SOS Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("SOS Error: $e"),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _turnOffSOS() {
+    setState(() => _sosActive = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✓ SOS Alert turned off"),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -253,9 +278,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSOSButton() {
     return GestureDetector(
-      onLongPress: _triggerSOS,
-      onLongPressStart: (_) => setState(() => _buttonScale = 0.92),
-      onLongPressEnd: (_) => setState(() => _buttonScale = 1.0),
+      onLongPress: _sosActive ? null : _triggerSOS,
+      onTap: _sosActive ? _turnOffSOS : null,
+      onLongPressStart: (_) =>
+          !_sosActive ? setState(() => _buttonScale = 0.92) : null,
+      onLongPressEnd: (_) =>
+          !_sosActive ? setState(() => _buttonScale = 1.0) : null,
       child: AnimatedScale(
         scale: _buttonScale,
         duration: const Duration(milliseconds: 150),
@@ -264,33 +292,46 @@ class _HomeScreenState extends State<HomeScreen> {
           width: 200,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppTheme.emergencyRed,
+            color: _sosActive ? Colors.redAccent : AppTheme.emergencyRed,
             boxShadow: [
               BoxShadow(
-                  color: AppTheme.emergencyRed.withOpacity(0.35),
-                  blurRadius: 50,
-                  spreadRadius: 10),
+                  color: _sosActive
+                      ? Colors.redAccent.withOpacity(0.5)
+                      : AppTheme.emergencyRed.withOpacity(0.35),
+                  blurRadius: _sosActive ? 80 : 50,
+                  spreadRadius: _sosActive ? 15 : 10),
             ],
-            gradient: const LinearGradient(
-              colors: [AppTheme.emergencyRed, Color(0xFFD32F2F)],
+            gradient: LinearGradient(
+              colors: _sosActive
+                  ? [Colors.redAccent, Colors.red.shade700]
+                  : [AppTheme.emergencyRed, const Color(0xFFD32F2F)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
-          child: const Center(
+          child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.gpp_maybe_rounded, color: Colors.white, size: 50),
-                SizedBox(height: 8),
-                Text("SOS",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 36,
-                        letterSpacing: 1.5)),
-                Text("Hold to Alert",
-                    style: TextStyle(color: Colors.white70, fontSize: 11)),
+                if (_sosActive)
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 50)
+                else
+                  const Icon(Icons.gpp_maybe_rounded,
+                      color: Colors.white, size: 50),
+                const SizedBox(height: 8),
+                Text(
+                  _sosActive ? "ACTIVE" : "SOS",
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 36,
+                      letterSpacing: 1.5),
+                ),
+                Text(
+                  _sosActive ? "Tap to turn off" : "Hold to Alert",
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
               ],
             ),
           ),
