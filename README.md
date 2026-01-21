@@ -2,6 +2,8 @@
 
 A new Flutter project.
 
+tithi and ebrahim
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
