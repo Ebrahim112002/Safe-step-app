@@ -2,7 +2,7 @@
 
 A new Flutter project.
 
-tithi and ebrahim
+tithi and ebrahim ch
 
 ## Getting Started
 
