@@ -22,16 +22,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final double _safetyScore = 8.5;
 
-  // Future<void> _triggerSOS() async {
-  //   try {
+  Future<void> _triggerSOS() async {
+    try {
        
-  //     Position pos = await Geolocator.getCurrentPosition(
-  //         desiredAccuracy: LocationAccuracy.high);
-  //     String mapLink =
-  //         "https://www.google.com/maps?q=${pos.latitude},${pos.longitude}";
-  //     String message = "EMERGENCY! I need help. My location: $mapLink";
+      Position pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      String mapLink =
+          "https://www.google.com/maps?q=${pos.latitude},${pos.longitude}";
+      String message = "EMERGENCY! I need help. My location: $mapLink";
 
-  //     final userId = _supabase.auth.currentUser?.id;
+      final userId = _supabase.auth.currentUser?.id;
 
       // ২. ডাটাবেজ থেকে কন্টাক্ট এবং ইমেইল নিয়ে আসা
       final contacts = await _supabase

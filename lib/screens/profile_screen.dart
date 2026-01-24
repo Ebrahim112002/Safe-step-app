@@ -34,7 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // --- FIXED IMAGE PICK & UPLOAD ---
+  
   Future<void> _pickAndUploadImage() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -51,17 +51,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final imageBytes = await image.readAsBytes();
-      // Web-e path logic problematic, tai direct unique name create korchi
+      
       final fileName =
           '${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-      // 1. Supabase Storage-e upload (ContentType fix kora hoyeche)
+      
       await _supabase.storage.from('avatars').uploadBinary(
             fileName,
             imageBytes,
             fileOptions: const FileOptions(
               contentType:
-                  'image/jpeg', // Manual set korle ar media error ashbe na
+                  'image/jpeg', 
               upsert: true,
             ),
           );
