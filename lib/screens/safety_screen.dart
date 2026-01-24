@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlng;
 import '../core/app_theme.dart';
 
-// Enhanced location database for Dhaka
+
 final Map<String, latlng.LatLng> _locationDatabase = {
   'uttara': latlng.LatLng(23.8759, 90.3795),
   'uttara sector 3': latlng.LatLng(23.8789, 90.4158),
