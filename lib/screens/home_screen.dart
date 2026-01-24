@@ -20,20 +20,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _sosActive = false;
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Dummy data for Safety Score
   final double _safetyScore = 8.5;
 
-  // --- SOS Logic (SMS, Email & Location) ---
-  Future<void> _triggerSOS() async {
-    try {
-      // ১. বর্তমান লোকেশন নেওয়া
-      Position pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      String mapLink =
-          "https://www.google.com/maps?q=${pos.latitude},${pos.longitude}";
-      String message = "EMERGENCY! I need help. My location: $mapLink";
+  // Future<void> _triggerSOS() async {
+  //   try {
+       
+  //     Position pos = await Geolocator.getCurrentPosition(
+  //         desiredAccuracy: LocationAccuracy.high);
+  //     String mapLink =
+  //         "https://www.google.com/maps?q=${pos.latitude},${pos.longitude}";
+  //     String message = "EMERGENCY! I need help. My location: $mapLink";
 
-      final userId = _supabase.auth.currentUser?.id;
+  //     final userId = _supabase.auth.currentUser?.id;
 
       // ২. ডাটাবেজ থেকে কন্টাক্ট এবং ইমেইল নিয়ে আসা
       final contacts = await _supabase
